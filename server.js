@@ -3,42 +3,75 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
-// ==========================================
-// ABUBAKAR AI TECHNOLOGY COMPANY
-// Main Backend Server
-// Version 1.0.0
-// Architecture: Modular Monolith
-// ==========================================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
 const PORT = process.env.PORT || 3000;
 const APP_NAME = "ABUBAKAR AI TECHNOLOGY COMPANY";
 const APP_VERSION = "1.0.0";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
-const GEMINI_MODEL =
-  process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// ==========================================
-// SECURITY CONFIGURATION
-// ==========================================
+const genAI = GEMINI_API_KEY
+  ? new GoogleGenerativeAI(GEMINI_API_KEY)
+  : null;
+
+const aiModel = genAI
+  ? genAI.getGenerativeModel({
+      model: GEMINI_MODEL,
+      systemInstruction: `
+You are ABUBAKAR AI, the official AI assistant
+of ABUBAKAR AI TECHNOLOGY COMPANY.
+
+Help users with education, research, technology,
+programming, creativity and general health education.
+
+Be helpful, respectful, accurate and honest.
+Do not invent facts.
+Respond in the language used by the user.
+For medical questions, provide education rather
+than diagnosis or prescriptions.
+      `
+    })
+  : null;
+
+// SECURITY
 
 app.disable("x-powered-by");
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"]
+      }
+    }
+  })
+);
 
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map(x => x.trim())
-  : ["*"];
+  : [];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes("*") ||
-        allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
@@ -48,9 +81,7 @@ app.use(cors({
 
 app.use(express.json({ limit: "1mb" }));
 
-// ==========================================
 // BASIC RATE LIMITING
-// ==========================================
 
 const requests = new Map();
 
@@ -79,73 +110,36 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-// ==========================================
-// AI ENGINE CONFIGURATION
-// ==========================================
+// WEBSITE FRONTEND
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+app.use(express.static(path.join(__dirname, "public")));
 
-const genAI = GEMINI_API_KEY
-  ? new GoogleGenerativeAI(GEMINI_API_KEY)
-  : null;
+// COMPANY INFORMATION
 
-const aiModel = genAI
-  ? genAI.getGenerativeModel({
-      model: GEMINI_MODEL,
-      systemInstruction: `
-You are ABUBAKAR AI, the official AI assistant
-of ABUBAKAR AI TECHNOLOGY COMPANY.
-
-Your responsibilities include:
-
-1. Answering questions clearly.
-2. Helping users learn.
-3. Supporting research.
-4. Explaining business and technology.
-5. Providing general health education.
-6. Supporting programming and creativity.
-
-Be helpful, respectful, accurate and honest.
-Do not invent facts.
-Respond in the language used by the user.
-For medical questions, provide education rather
-than diagnosis or prescriptions.
-      `
-    })
-  : null;
-
-// ==========================================
-// MAIN ROUTE
-// ==========================================
-
-app.get("/", (req, res) => {
-  res.status(200).json({
+app.get("/api", (req, res) => {
+  res.json({
+    success: true,
     company: APP_NAME,
     platform: "ABUBAKAR AI PLATFORM",
-    message: "Welcome to our official AI server.",
     version: APP_VERSION,
     status: "running"
   });
 });
 
-// ==========================================
 // HEALTH CHECK
-// ==========================================
 
 app.get("/api/health", (req, res) => {
-  res.status(200).json({
+  res.json({
     success: true,
     company: APP_NAME,
     server: "online",
-    aiEngine: genAI ? "configured" : "not configured",
+    aiEngine: aiModel ? "configured" : "not configured",
     version: APP_VERSION,
     timestamp: new Date().toISOString()
   });
 });
 
-// ==========================================
-// AI CHAT ENGINE
-// ==========================================
+// AI CHAT
 
 app.post("/api/chat", async (req, res) => {
   try {
@@ -158,10 +152,7 @@ app.post("/api/chat", async (req, res) => {
 
     const { message, history = [] } = req.body;
 
-    if (
-      typeof message !== "string" ||
-      !message.trim()
-    ) {
+    if (typeof message !== "string" || !message.trim()) {
       return res.status(400).json({
         success: false,
         error: "Please provide a valid message."
@@ -185,12 +176,14 @@ app.post("/api/chat", async (req, res) => {
     const validHistory = [];
 
     for (const item of history) {
+      const text = item?.parts?.[0]?.text ?? item?.text;
+
       if (
         !item ||
         !["user", "model"].includes(item.role) ||
-        typeof item.text !== "string" ||
-        !item.text.trim() ||
-        item.text.length > 10000
+        typeof text !== "string" ||
+        !text.trim() ||
+        text.length > 10000
       ) {
         return res.status(400).json({
           success: false,
@@ -200,7 +193,7 @@ app.post("/api/chat", async (req, res) => {
 
       validHistory.push({
         role: item.role,
-        parts: [{ text: item.text }]
+        parts: [{ text }]
       });
     }
 
@@ -213,14 +206,14 @@ app.post("/api/chat", async (req, res) => {
     });
 
     const result = await chat.sendMessage(message.trim());
+    const reply = result.response.text();
 
-    const response = result.response.text();
-
-    return res.status(200).json({
+    return res.json({
       success: true,
       company: APP_NAME,
       assistant: "ABUBAKAR AI",
-      response,
+      reply,
+      response: reply,
       model: GEMINI_MODEL,
       timestamp: new Date().toISOString()
     });
@@ -235,9 +228,7 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// ==========================================
 // 404 HANDLER
-// ==========================================
 
 app.use((req, res) => {
   res.status(404).json({
@@ -246,9 +237,7 @@ app.use((req, res) => {
   });
 });
 
-// ==========================================
 // GLOBAL ERROR HANDLER
-// ==========================================
 
 app.use((err, req, res, next) => {
   console.error("SERVER ERROR:", err.message);
@@ -263,23 +252,19 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ==========================================
 // START SERVER
-// ==========================================
 
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log("================================");
   console.log(APP_NAME);
   console.log("ABUBAKAR AI PLATFORM");
-  console.log("Server: ONLINE");
-  console.log(`Port: ${PORT}`);
-  console.log(`AI Model: ${GEMINI_MODEL}`);
+  console.log("SERVER: ONLINE");
+  console.log(`PORT: ${PORT}`);
+  console.log(`AI MODEL: ${GEMINI_MODEL}`);
   console.log("================================");
 });
 
-// ==========================================
 // GRACEFUL SHUTDOWN
-// ==========================================
 
 function shutdown() {
   console.log("Shutting down server...");
