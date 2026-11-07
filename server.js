@@ -17,7 +17,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const APP_NAME = "ABUBAKAR AI TECHNOLOGY COMPANY";
 const APP_VERSION = "1.0.0";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
