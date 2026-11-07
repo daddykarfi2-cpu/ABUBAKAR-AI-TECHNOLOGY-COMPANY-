@@ -1,4 +1,4 @@
-const API_URL = "/api/chat";
+const API_URL = "https://abubakar-ai-platform.onrender.com/api/chat";
 
 const chatState = {
   history: [],
@@ -7,7 +7,6 @@ const chatState = {
 
 async function sendMessage(message) {
   const cleanMessage = message.trim();
-
   if (!cleanMessage || chatState.isLoading) {
     return null;
   }
@@ -40,10 +39,9 @@ async function sendMessage(message) {
     );
 
     return reply;
-
   } catch (error) {
     console.error("ABUBAKAR AI Error:", error);
-    return "An samu matsala wajen haɗuwa da AI. Ka sake gwadawa.";
+    return "An samu matsala wajen haduwa da AI. Ka sake gwadawa.";
   } finally {
     chatState.isLoading = false;
   }
@@ -56,4 +54,4 @@ function clearChatHistory() {
 window.ABUBAKAR_AI = {
   sendMessage,
   clearChatHistory
-};app.js
+};
